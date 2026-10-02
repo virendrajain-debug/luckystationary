@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 // NOTE: update `site` to your real production domain before deploying
 // (used for canonical URLs + Open Graph tags).
 export default defineConfig({
-  site: 'https://lucky-stationery.netlify.app',
+  site: 'https://luckystationary.vercel.app',
   output: 'static',
   compressHTML: true,
   integrations: [react()],
