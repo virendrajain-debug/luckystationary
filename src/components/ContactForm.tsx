@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 const PHONE = "919424068398";
 
@@ -12,64 +12,93 @@ const TOPICS = [
   "Something else",
 ];
 
+type Errors = { name?: string; phone?: string; message?: string };
+
 export default function ContactForm() {
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    topic: TOPICS[0],
-    message: "",
-  });
-  const [err, setErr] = useState("");
-  const [sent, setSent] = useState(false);
+  const uid = useId();
+  const [form, setForm] = useState({ name: "", phone: "", topic: TOPICS[0], message: "" });
+  const [errors, setErrors] = useState<Errors>({});
+  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
 
-  const set = (k: keyof typeof form, v: string) =>
+  const set = (k: keyof typeof form, v: string) => {
     setForm((f) => ({ ...f, [k]: v }));
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = form.name.trim();
-    const phone = form.phone.replace(/\D/g, "");
-    const message = form.message.trim();
-
-    if (name.length < 2) return setErr("Please enter your name.");
-    if (phone.length < 10) return setErr("Please enter a valid 10-digit phone number.");
-    if (message.length < 3) return setErr("Please tell us what you need.");
-
-    setErr("");
-
-    const text = [
-      `Hi Lucky Stationery & Sports! 👋`,
-      ``,
-      `*Name:* ${name}`,
-      `*Phone:* ${form.phone.trim()}`,
-      `*Needed:* ${form.topic}`,
-      ``,
-      `*Query:* ${message}`,
-    ].join("\n");
-
-    setSent(true);
-    window.open(`https://wa.me/${PHONE}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
-  if (sent) {
+  const validate = (): Errors => {
+    const e: Errors = {};
+    if (form.name.trim().length < 2) e.name = "Please enter your name (2+ characters).";
+    if (form.phone.replace(/\D/g, "").length < 10)
+      e.phone = "Enter a valid 10-digit mobile number.";
+    if (form.message.trim().length < 3)
+      e.message = "Tell us what you need — a few words is enough.";
+    return e;
+  };
+
+  const submit = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    const e = validate();
+    setErrors(e);
+    if (Object.keys(e).length > 0) {
+      // move focus to first invalid field
+      const first = Object.keys(e)[0];
+      document.getElementById(`${uid}-${first}`)?.focus();
+      return;
+    }
+
+    const text = [
+      "Hello Lucky Stationery & Sports!",
+      "",
+      `Name: ${form.name.trim()}`,
+      `Phone: ${form.phone.trim()}`,
+      `Needed: ${form.topic}`,
+      "",
+      `Query: ${form.message.trim()}`,
+    ].join("\n");
+
+    setStatus("sending");
+    const url = `https://wa.me/${PHONE}?text=${encodeURIComponent(text)}`;
+
+    // brief "sending" state so the action reads as intentional, then hand off
+    window.setTimeout(() => {
+      setStatus("sent");
+      window.open(url, "_blank", "noopener");
+    }, 600);
+  };
+
+  /* ---------------- empty / sent state ---------------- */
+  if (status === "sent") {
     return (
-      <div className="card p-8 text-center" role="status" aria-live="polite">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-wa/15 text-wa-deep">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+      <div className="card p-6 sm:p-8" role="status" aria-live="polite">
+        <div className="flex items-start gap-3 border-b-2 border-ink pb-5">
+          <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center border-[1.5px] border-ink bg-wa font-mono text-sm font-bold">
+            ✓
+          </span>
+          <div>
+            <h3 className="font-display text-xl leading-tight font-extrabold">
+              WhatsApp is opening…
+            </h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
+              Your query is pre-filled and addressed to{" "}
+              <span className="font-mono font-bold">+91 94240 68398</span>. Press send
+              in WhatsApp and we'll reply during shop hours.
+            </p>
+          </div>
         </div>
-        <h3 className="mt-5 text-2xl font-extrabold">WhatsApp is opening…</h3>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-soft">
-          Your message is ready and pre-filled. Just hit send in WhatsApp and we'll
-          get back to you shortly.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <button type="button" className="btn btn-ghost" onClick={() => setSent(false)}>
-            Send another query
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              setForm({ name: "", phone: "", topic: TOPICS[0], message: "" });
+              setStatus("idle");
+            }}
+          >
+            Write another query
           </button>
           <a
-            className="btn btn-wa"
+            className="btn btn-wa btn-sm"
             href={`https://wa.me/${PHONE}`}
             target="_blank"
             rel="noopener"
@@ -77,47 +106,100 @@ export default function ContactForm() {
             Open WhatsApp manually
           </a>
         </div>
+
+        <p className="mt-5 font-mono text-[11px] tracking-widest text-ink-faint uppercase">
+          Didn't see WhatsApp? Disable popup blocking for this page.
+        </p>
       </div>
     );
   }
 
+  /* ---------------- form ---------------- */
+  const errList = Object.entries(errors).filter(([, v]) => v) as [string, string][];
+
   return (
-    <form onSubmit={submit} className="card p-6 sm:p-8" noValidate>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="lbl">Your name</span>
+    <form onSubmit={submit} className="card p-6 sm:p-8" noValidate aria-describedby={errList.length ? `${uid}-errors` : undefined}>
+      <div className="flex items-baseline justify-between gap-3 border-b-2 border-ink pb-4">
+        <h3 className="font-display text-xl font-extrabold">Query form</h3>
+        <span className="label">→ WhatsApp</span>
+      </div>
+
+      {/* error summary */}
+      {errList.length > 0 && (
+        <div
+          id={`${uid}-errors`}
+          role="alert"
+          className="mt-5 border-l-4 border-signal bg-signal/8 px-4 py-3"
+        >
+          <p className="font-mono text-[11px] font-bold tracking-widest text-signal uppercase">
+            {errList.length} field{errList.length > 1 ? "s" : ""} need{errList.length > 1 ? "" : "s"} attention
+          </p>
+          <ul className="mt-1.5 space-y-0.5 text-sm font-semibold">
+            {errList.map(([k, v]) => (
+              <li key={k}>— {v}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-5 sm:grid-cols-2">
+        <div>
+          <label className="label block" htmlFor={`${uid}-name`}>
+            Your name <span className="text-signal">*</span>
+          </label>
           <input
-            className="inp"
+            id={`${uid}-name`}
+            className="field mt-1"
             type="text"
             name="name"
             autoComplete="name"
             placeholder="e.g. Rahul Sharma"
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
+            aria-invalid={errors.name ? "true" : "false"}
+            aria-describedby={errors.name ? `${uid}-name-err` : undefined}
             required
           />
-        </label>
+          {errors.name && (
+            <p id={`${uid}-name-err`} className="mt-1.5 font-mono text-[11px] font-bold text-signal">
+              ↳ {errors.name}
+            </p>
+          )}
+        </div>
 
-        <label className="block">
-          <span className="lbl">Phone number</span>
+        <div>
+          <label className="label block" htmlFor={`${uid}-phone`}>
+            Phone number <span className="text-signal">*</span>
+          </label>
           <input
-            className="inp"
+            id={`${uid}-phone`}
+            className="field mt-1"
             type="tel"
             name="phone"
             inputMode="tel"
             autoComplete="tel"
-            placeholder="10-digit mobile number"
+            placeholder="10-digit mobile"
             value={form.phone}
             onChange={(e) => set("phone", e.target.value)}
+            aria-invalid={errors.phone ? "true" : "false"}
+            aria-describedby={errors.phone ? `${uid}-phone-err` : undefined}
             required
           />
-        </label>
+          {errors.phone && (
+            <p id={`${uid}-phone-err`} className="mt-1.5 font-mono text-[11px] font-bold text-signal">
+              ↳ {errors.phone}
+            </p>
+          )}
+        </div>
       </div>
 
-      <label className="mt-4 block">
-        <span className="lbl">What do you need?</span>
+      <div className="mt-5">
+        <label className="label block" htmlFor={`${uid}-topic`}>
+          What do you need?
+        </label>
         <select
-          className="inp"
+          id={`${uid}-topic`}
+          className="field mt-1"
           name="topic"
           value={form.topic}
           onChange={(e) => set("topic", e.target.value)}
@@ -128,73 +210,55 @@ export default function ContactForm() {
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <label className="mt-4 block">
-        <span className="lbl">Your query</span>
+      <div className="mt-5">
+        <label className="label block" htmlFor={`${uid}-message`}>
+          Your query <span className="text-signal">*</span>
+        </label>
         <textarea
-          className="inp min-h-32 resize-y"
+          id={`${uid}-message`}
+          className="field mt-1 min-h-28 resize-y"
           name="message"
           rows={4}
-          placeholder="Tell us the items, quantity, brand or anything else…"
+          placeholder="Items, quantity, brand… e.g. “12 Classmate notebooks + 4 setStatein pens”"
           value={form.message}
           onChange={(e) => set("message", e.target.value)}
+          aria-invalid={errors.message ? "true" : "false"}
+          aria-describedby={errors.message ? `${uid}-message-err` : undefined}
           required
         />
-      </label>
+        {errors.message && (
+          <p id={`${uid}-message-err`} className="mt-1.5 font-mono text-[11px] font-bold text-signal">
+            ↳ {errors.message}
+          </p>
+        )}
+      </div>
 
-      {err && (
-        <p className="mt-3 rounded-xl bg-coral/10 px-4 py-2.5 text-sm font-semibold text-coral" role="alert">
-          {err}
-        </p>
-      )}
-
-      <button type="submit" className="btn btn-wa mt-6 w-full !py-4 text-base">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.6-6.1c-.3-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.7.8-.8 1-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4 0-.5.2-.7l.4-.5c.1-.2.1-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2.1 3.2 5 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2l-.4-.4z" />
-        </svg>
-        Send query on WhatsApp
+      <button
+        type="submit"
+        className="btn btn-wa btn-block mt-7 !py-4 text-[15px]"
+        disabled={status === "sending"}
+        aria-busy={status === "sending"}
+      >
+        {status === "sending" ? (
+          <>
+            <span className="spinner" aria-hidden="true" />
+            Opening WhatsApp…
+          </>
+        ) : (
+          <>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.6-6.1c-.3-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.7.8-.8 1-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4 0-.5.2-.7l.4-.5c.1-.2.1-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2.1 3.2 5 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2l-.4-.4z" />
+            </svg>
+            Send query on WhatsApp
+          </>
+        )}
       </button>
 
-      <p className="mt-3 text-center text-xs text-ink-faint">
-        We reply fast during shop hours · 9:00 AM – 9:00 PM, all week
+      <p className="mt-3 text-center font-mono text-[11px] tracking-wide text-ink-faint uppercase">
+        Replies within shop hours · 09:00–21:00 daily
       </p>
-
-      <style>{`
-        .lbl {
-          display: block;
-          font-size: 0.78rem;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: var(--color-ink-faint);
-          margin-bottom: 0.45rem;
-        }
-        .inp {
-          width: 100%;
-          border-radius: 0.95rem;
-          border: 1.5px solid rgb(15 23 42 / 0.1);
-          background: rgb(255 255 255 / 0.9);
-          padding: 0.85rem 1rem;
-          font-size: 0.95rem;
-          font-weight: 500;
-          color: var(--color-ink);
-          transition: border-color 0.2s ease, box-shadow 0.2s ease;
-          outline: none;
-        }
-        .inp::placeholder { color: var(--color-ink-faint); font-weight: 400; }
-        .inp:focus {
-          border-color: var(--color-royal);
-          box-shadow: 0 0 0 4px rgb(37 99 235 / 0.14);
-        }
-        select.inp {
-          appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: right 1rem center;
-          padding-right: 2.6rem;
-        }
-      `}</style>
     </form>
   );
 }
